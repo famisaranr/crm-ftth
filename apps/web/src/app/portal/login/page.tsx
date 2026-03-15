@@ -34,7 +34,10 @@ export default function SubscriberLogin() {
       const data = await res.json();
       
       // Store token and redirect
-      localStorage.setItem('subscriber_token', data.access_token);
+      const token = data.data?.access_token || data.access_token;
+      if (!token) throw new Error('Token missing from server response');
+      
+      localStorage.setItem('subscriber_token', token);
       toast('success', 'Welcome back!');
       router.push('/portal/dashboard');
     } catch (error: any) {

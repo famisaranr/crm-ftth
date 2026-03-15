@@ -23,7 +23,8 @@ export default function SubscriberTickets() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Session expired');
-      setTickets(await res.json());
+      const data = await res.json();
+      setTickets(Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []));
     } catch {
       router.push('/portal/login');
     } finally {

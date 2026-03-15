@@ -27,8 +27,11 @@ export default function SubscriberDashboard() {
 
         if (!profileRes.ok) throw new Error('Session expired');
 
-        setProfile(await profileRes.json());
-        setTickets(await ticketsRes.json());
+        const profileData = await profileRes.json();
+        const ticketsData = await ticketsRes.json();
+
+        setProfile(profileData.data || profileData);
+        setTickets(Array.isArray(ticketsData.data) ? ticketsData.data : (Array.isArray(ticketsData) ? ticketsData : []));
       } catch (err) {
         localStorage.removeItem('subscriber_token');
         router.push('/portal/login');

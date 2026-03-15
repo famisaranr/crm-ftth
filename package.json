@@ -18,5 +18,5 @@
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0"
   },
-  "packageManager": "pnpm@8.15.5+sha256.4b4efa12490e5055d59b9b9fb042e430daeba88bdbebdcd93bbf62e3e9d8011c"
+  "packageManager": "pnpm@9.15.4"
 }

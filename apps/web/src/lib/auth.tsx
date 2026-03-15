@@ -57,9 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
     }, []);
 
-    // Redirect to login if not authenticated and not on login page
+    // Redirect to login if not authenticated and not on whitelist
     useEffect(() => {
-        if (!isLoading && (!token || !user) && pathname !== '/login') {
+        const isPublicPath = pathname === '/login' || pathname.startsWith('/portal');
+        if (!isLoading && (!token || !user) && !isPublicPath) {
             router.replace('/login');
         }
     }, [isLoading, token, user, pathname, router]);

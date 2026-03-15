@@ -28,7 +28,7 @@ export function createMockPrismaService() {
         'auditLog', 'systemSetting', 'refreshToken', 'session',
     ];
 
-    const mock: Record<string, unknown> = {
+    const mock: Record<string, any> = {
         $transaction: jest.fn((fn) => fn(mock)),
     };
 
