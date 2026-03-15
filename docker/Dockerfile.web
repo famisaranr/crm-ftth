@@ -2,7 +2,11 @@ FROM node:20-alpine AS builder
 # Setup pnpm
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN npm install -g pnpm@8.15.5
+RUN npm install -g pnpm@9.15.4
+
+# Build-time variable — must be set to the public API URL before building
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 WORKDIR /app
 COPY . .
