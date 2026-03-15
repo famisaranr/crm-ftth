@@ -13,11 +13,6 @@ export default function PortalLayout({
         <h1 className="font-bold text-lg">FiberOps Portal</h1>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-4xl mx-auto p-4 md:p-8 overflow-y-auto">
-        {children}
-      </main>
-
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 w-full h-20 bg-white border-t border-gray-200 flex justify-around items-center z-40 pb-safe">
         <Link href="/portal/dashboard" className="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-blue-600">
@@ -39,7 +34,7 @@ export default function PortalLayout({
       </nav>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 h-screen bg-blue-900 text-white fixed top-0 left-0 p-6">
+      <aside className="hidden md:flex flex-col w-64 h-screen bg-blue-900 text-white fixed top-0 left-0 p-6 z-50">
         <h1 className="font-bold text-2xl mb-10 tracking-tight">Fiber<span className="text-blue-300">Ops</span> Self-Care</h1>
         <nav className="flex-1 flex flex-col gap-2">
           <Link href="/portal/dashboard" className="px-4 py-3 rounded-lg hover:bg-white/10 transition-colors flex items-center gap-3">
@@ -61,9 +56,13 @@ export default function PortalLayout({
           </button>
         </div>
       </aside>
-      
-      {/* Desktop Margin Offset */}
-      <div className="hidden md:block w-64 shrink-0" />
+
+      {/* Main Content Area */}
+      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+        <main className="flex-1 w-full max-w-5xl mx-auto p-4 md:p-8">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
