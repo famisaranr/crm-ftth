@@ -1,0 +1,35 @@
+# FiberOps PH — Product Definition Pack v1
+
+**Project Name:** FiberOps PH  
+**Product Type:** FTTH Operations Platform (OSS/BSS + JV Settlement Layer)  
+**Primary Market:** Barangay-level FTTH operators and rural fiber deployments in the Philippines
+
+---
+
+# 1. Product Vision
+
+FiberOps PH is a telecom operations platform designed for **fiber-to-the-home (FTTH) operators running networks across multiple barangays with different joint venture partners**.
+
+The system combines:
+
+- Subscriber CRM
+- Fiber network asset management
+- Installation workflows
+- Ticketing system
+- Billing and collections
+- Network-to-customer traceability
+- Joint venture revenue settlement
+
+The platform solves a **major operational gap** in rural telecom deployments where existing OSS/BSS systems do not support **barangay-level revenue sharing and JV accounting**.
+
+FiberOps PH is therefore designed as a **Fiber ISP Operating System tailored for decentralized fiber networks.**
+
+---
+
+# 2. Problem Statement
+
+Small FTTH operators commonly suffer from fragmented systems and poor operational traceability.
+
+### Fragmented Systems
+
+Operators often rely on:

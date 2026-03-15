@@ -1,0 +1,1073 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS (Phase 0)
+// ==========================================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+  PENDING
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  LOGIN
+  LOGIN_FAILED
+  EXPORT
+  APPROVAL
+}
+
+enum AgreementStatus {
+  DRAFT
+  ACTIVE
+  AMENDED
+  EXPIRED
+  TERMINATED
+}
+
+enum BarangayStatus {
+  ACTIVE
+  INACTIVE
+  ONBOARDING
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+  DEPRECATED
+}
+
+enum ShareType {
+  GROSS
+  NET
+}
+
+// ==========================================
+// ENUMS (Phase 1)
+// ==========================================
+
+enum SubscriberStatus {
+  PROSPECT
+  SURVEYED
+  INSTALLATION_READY
+  ACTIVE
+  SUSPENDED_SOFT
+  SUSPENDED_HARD
+  DISCONNECTED
+  CHURNED
+}
+
+enum InstallationStatus {
+  LEAD_CREATED
+  SURVEY_SCHEDULED
+  SURVEY_COMPLETED
+  FEASIBLE
+  NOT_FEASIBLE
+  INSTALL_SCHEDULED
+  INSTALLED
+  ACTIVATED
+  QA_VERIFIED
+  BILLING_STARTED
+  FAILED
+  RESCHEDULED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  PENDING_CUSTOMER
+  RESOLVED
+  CLOSED
+  ESCALATED
+  REOPENED
+}
+
+enum TicketCategory {
+  NO_CONNECTION
+  INTERMITTENT
+  SLOW_INTERNET
+  LOS_RED_LIGHT
+  FIBER_CUT
+  BILLING_ISSUE
+  RELOCATION
+  UPGRADE_DOWNGRADE
+  ONT_REPLACEMENT
+  COMPLAINT
+  ESCALATION
+  OTHER
+}
+
+enum TicketPriority {
+  P1_CRITICAL
+  P2_HIGH
+  P3_MEDIUM
+  P4_LOW
+}
+
+enum AssetStatus {
+  PLANNED
+  DEPLOYED
+  ACTIVE
+  MAINTENANCE
+  DECOMMISSIONED
+  FAULTY
+}
+
+// ==========================================
+// ENUMS (Phase 2)
+// ==========================================
+
+enum InvoiceStatus {
+  DRAFT
+  GENERATED
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  WRITTEN_OFF
+  VOIDED
+}
+
+enum PaymentMethod {
+  CASH
+  GCASH
+  BANK_TRANSFER
+  CHECK
+  ONLINE
+  OTHER
+}
+
+enum LedgerEntryType {
+  CHARGE
+  PAYMENT
+  ADJUSTMENT_CREDIT
+  ADJUSTMENT_DEBIT
+  PENALTY
+  WRITE_OFF
+  REVERSAL
+  REACTIVATION_FEE
+}
+
+enum InvoiceLineType {
+  MONTHLY_CHARGE
+  INSTALLATION_FEE
+  PENALTY
+  DISCOUNT
+  PROMO_DISCOUNT
+  ADJUSTMENT
+  PRORATE_CHARGE
+  PRORATE_CREDIT
+  REACTIVATION_FEE
+}
+
+enum SuspensionType {
+  SOFT
+  HARD
+}
+
+enum SuspensionActionType {
+  SUSPENDED
+  REACTIVATED
+  MANUAL_OVERRIDE
+}
+
+enum BillingCycleStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum SettlementStatus {
+  DRAFTED
+  CALCULATED
+  UNDER_REVIEW
+  APPROVED
+  DISBURSED
+  LOCKED
+  DISPUTED
+}
+
+// ==========================================
+// IDENTITY & ACCESS
+// ==========================================
+
+model User {
+  id                 String      @id @default(uuid()) @db.Uuid
+  email              String      @unique @db.VarChar(255)
+  password_hash      String      @db.VarChar(255)
+  full_name          String      @db.VarChar(255)
+  phone              String?     @db.VarChar(20)
+  status             UserStatus  @default(ACTIVE)
+  last_login_at      DateTime?
+  failed_login_count Int         @default(0)
+  locked_until       DateTime?
+
+  user_roles         UserRole[]
+  user_scopes        UserScope[]
+  sessions           Session[]
+  audit_logs         AuditLog[]  @relation("actor")
+
+  // Phase 1 relations
+  installation_jobs  InstallationJob[] @relation("technician")
+  ticket_assignments TicketAssignment[]
+
+  created_at         DateTime    @default(now())
+  updated_at         DateTime    @updatedAt
+  created_by         String?     @db.Uuid
+  updated_by         String?     @db.Uuid
+
+  @@map("users")
+}
+
+model Role {
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String           @unique @db.VarChar(100)
+  description      String?          @db.Text
+  is_system_role   Boolean          @default(false)
+
+  user_roles       UserRole[]
+  role_permissions RolePermission[]
+
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id               String           @id @default(uuid()) @db.Uuid
+  code             String           @unique @db.VarChar(100)
+  module           String           @db.VarChar(50)
+  action           String           @db.VarChar(50)
+  description      String?          @db.Text
+
+  role_permissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id      String @id @default(uuid()) @db.Uuid
+  user_id String @db.Uuid
+  role_id String @db.Uuid
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, role_id])
+  @@map("user_roles")
+}
+
+model UserScope {
+  id          String    @id @default(uuid()) @db.Uuid
+  user_id     String    @db.Uuid
+  barangay_id String?   @db.Uuid
+  partner_id  String?   @db.Uuid
+
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  barangay    Barangay? @relation(fields: [barangay_id], references: [id])
+  partner     Partner?  @relation(fields: [partner_id], references: [id])
+
+  @@map("user_scopes")
+}
+
+model RolePermission {
+  id            String @id @default(uuid()) @db.Uuid
+  role_id       String @db.Uuid
+  permission_id String @db.Uuid
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String    @db.VarChar(255)
+  ip_address String?   @db.VarChar(45)
+  user_agent String?   @db.Text
+  expires_at DateTime
+  revoked_at DateTime?
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+  @@map("sessions")
+}
+
+// ==========================================
+// TENANT MANAGEMENT (Phase 0)
+// ==========================================
+
+model Barangay {
+  id                 String             @id @default(uuid()) @db.Uuid
+  name               String             @unique @db.VarChar(255)
+  municipality       String             @db.VarChar(255)
+  province           String             @db.VarChar(255)
+  region             String?            @db.VarChar(100)
+  status             BarangayStatus     @default(ONBOARDING)
+  latitude           Decimal?           @db.Decimal(10, 7)
+  longitude          Decimal?           @db.Decimal(10, 7)
+
+  service_zones      ServiceZone[]
+  partner_agreements PartnerAgreement[]
+  user_scopes        UserScope[]
+
+  // Phase 1 relations
+  subscribers        Subscriber[]
+  network_assets     NetworkAsset[]
+
+  // Phase 2 relations
+  billing_cycles     BillingCycle[]
+
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  created_by         String?            @db.Uuid
+  updated_by         String?            @db.Uuid
+
+  @@map("barangays")
+}
+
+model ServiceZone {
+  id          String   @id @default(uuid()) @db.Uuid
+  barangay_id String   @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+
+  barangay    Barangay @relation(fields: [barangay_id], references: [id])
+
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("service_zones")
+}
+
+model Partner {
+  id                 String             @id @default(uuid()) @db.Uuid
+  company_name       String             @db.VarChar(255)
+  contact_person     String?            @db.VarChar(255)
+  phone              String?            @db.VarChar(20)
+  email              String?            @db.VarChar(255)
+  address            String?            @db.Text
+  status             String             @default("ACTIVE") @db.VarChar(20)
+
+  partner_agreements PartnerAgreement[]
+  user_scopes        UserScope[]
+
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  created_by         String?            @db.Uuid
+  updated_by         String?            @db.Uuid
+
+  @@map("partners")
+}
+
+model PartnerAgreement {
+  id                  String             @id @default(uuid()) @db.Uuid
+  partner_id          String             @db.Uuid
+  barangay_id         String             @db.Uuid
+  agreement_number    String             @unique @db.VarChar(50)
+  effective_date      DateTime           @db.Date
+  end_date            DateTime?          @db.Date
+  status              AgreementStatus    @default(DRAFT)
+  version             Int                @default(1)
+  notes               String?            @db.Text
+
+  partner             Partner            @relation(fields: [partner_id], references: [id])
+  barangay            Barangay           @relation(fields: [barangay_id], references: [id])
+  revenue_share_rules RevenueShareRule[]
+
+  // Phase 3 relations
+  settlements         Settlement[]
+
+  created_at          DateTime           @default(now())
+  updated_at          DateTime           @updatedAt
+  created_by          String?            @db.Uuid
+  updated_by          String?            @db.Uuid
+
+  @@index([partner_id, barangay_id])
+  @@map("partner_agreements")
+}
+
+model RevenueShareRule {
+  id                 String           @id @default(uuid()) @db.Uuid
+  agreement_id       String           @db.Uuid
+  share_type         ShareType
+  partner_percentage Decimal          @db.Decimal(5, 4)
+  deduction_buckets  Json?
+  description        String?          @db.Text
+
+  agreement          PartnerAgreement @relation(fields: [agreement_id], references: [id], onDelete: Cascade)
+
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+
+  @@map("revenue_share_rules")
+}
+
+// ==========================================
+// PRODUCT & PRICING (Phase 0)
+// ==========================================
+
+model ServicePlan {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String        @db.VarChar(255)
+  speed_mbps       Int
+  monthly_fee      Decimal       @db.Decimal(18, 2)
+  installation_fee Decimal       @default(0) @db.Decimal(18, 2)
+  status           PlanStatus    @default(ACTIVE)
+  description      String?       @db.Text
+
+  plan_features    PlanFeature[]
+  promos           Promo[]
+
+  // Phase 1 relations
+  subscriptions    Subscription[]
+
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  created_by       String?       @db.Uuid
+  updated_by       String?       @db.Uuid
+
+  @@map("service_plans")
+}
+
+model PlanFeature {
+  id            String      @id @default(uuid()) @db.Uuid
+  plan_id       String      @db.Uuid
+  feature_name  String      @db.VarChar(100)
+  feature_value String      @db.VarChar(255)
+
+  plan          ServicePlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+
+  @@map("plan_features")
+}
+
+model Promo {
+  id                  String      @id @default(uuid()) @db.Uuid
+  plan_id             String      @db.Uuid
+  name                String      @db.VarChar(255)
+  discount_amount     Decimal?    @db.Decimal(18, 2)
+  discount_percentage Decimal?    @db.Decimal(5, 2)
+  duration_months     Int?
+  valid_from          DateTime    @db.Date
+  valid_to            DateTime?   @db.Date
+  status              String      @default("ACTIVE") @db.VarChar(20)
+
+  plan                ServicePlan @relation(fields: [plan_id], references: [id])
+
+  created_at          DateTime    @default(now())
+
+  @@map("promos")
+}
+
+// ==========================================
+// SYSTEM (Phase 0)
+// ==========================================
+
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  entity_type    String      @db.VarChar(100)
+  entity_id      String      @db.Uuid
+  action         AuditAction
+  actor_id       String?     @db.Uuid
+  actor_role     String?     @db.VarChar(100)
+  actor_ip       String?     @db.VarChar(45)
+  previous_value Json?
+  new_value      Json?
+  source_module  String?     @db.VarChar(100)
+  reason_code    String?     @db.VarChar(100)
+  barangay_id    String?     @db.Uuid
+  correlation_id String?     @db.VarChar(64)
+
+  actor          User?       @relation("actor", fields: [actor_id], references: [id])
+
+  created_at     DateTime    @default(now())
+
+  @@index([entity_type, entity_id, created_at])
+  @@index([actor_id, created_at])
+  @@index([barangay_id, created_at])
+  @@map("audit_logs")
+}
+
+// ==========================================
+// SYSTEM SETTINGS (Phase 0)
+// ==========================================
+
+model SystemSetting {
+  id         String   @id @default(uuid()) @db.Uuid
+  key        String   @unique @db.VarChar(255)
+  value      String   @db.Text
+  updated_by String?  @db.Uuid
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+// ==========================================
+// SUBSCRIBER CRM (Phase 1)
+// ==========================================
+
+model Subscriber {
+  id              String           @id @default(uuid()) @db.Uuid
+  account_number  String           @unique @db.VarChar(30)
+  full_name       String           @db.VarChar(255)
+  phone           String?          @db.VarChar(20)
+  email           String?          @db.VarChar(255)
+  barangay_id     String           @db.Uuid
+  status          SubscriberStatus @default(PROSPECT)
+  billing_class   String?          @db.VarChar(50)
+  kyc_id_type     String?          @db.VarChar(50)
+  kyc_id_number   String?          @db.VarChar(100)
+  notes           String?          @db.Text
+  deleted_at      DateTime?
+
+  barangay           Barangay           @relation(fields: [barangay_id], references: [id])
+  address            SubscriberAddress?
+  subscriptions      Subscription[]
+  installation_jobs  InstallationJob[]
+  service_tickets    ServiceTicket[]
+  ont_device         OntDevice?
+
+  // Phase 2 relations
+  invoices           Invoice[]
+  payments           Payment[]
+  ledger_entries     AccountLedgerEntry[]
+  suspension_actions SuspensionAction[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+  updated_by String?  @db.Uuid
+
+  @@index([barangay_id, status])
+  @@map("subscribers")
+}
+
+model SubscriberAddress {
+  id            String   @id @default(uuid()) @db.Uuid
+  subscriber_id String   @unique @db.Uuid
+  address_line  String   @db.VarChar(500)
+  purok_sitio   String?  @db.VarChar(255)
+  barangay_name String?  @db.VarChar(255)
+  municipality  String?  @db.VarChar(255)
+  province      String?  @db.VarChar(255)
+  geotag_lat    Decimal? @db.Decimal(10, 7)
+  geotag_lng    Decimal? @db.Decimal(10, 7)
+
+  subscriber Subscriber @relation(fields: [subscriber_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("subscriber_addresses")
+}
+
+model Subscription {
+  id            String   @id @default(uuid()) @db.Uuid
+  subscriber_id String   @db.Uuid
+  plan_id       String   @db.Uuid
+  start_date    DateTime @db.Date
+  end_date      DateTime? @db.Date
+  status        String   @default("ACTIVE") @db.VarChar(20)
+
+  subscriber Subscriber  @relation(fields: [subscriber_id], references: [id])
+  plan       ServicePlan @relation(fields: [plan_id], references: [id])
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([subscriber_id])
+  @@map("subscriptions")
+}
+
+// ==========================================
+// NETWORK INVENTORY (Phase 1)
+// ==========================================
+
+model NetworkAssetType {
+  id              String @id @default(uuid()) @db.Uuid
+  name            String @unique @db.VarChar(100)
+  hierarchy_level Int
+  description     String? @db.Text
+
+  network_assets NetworkAsset[]
+
+  @@map("network_asset_types")
+}
+
+model NetworkAsset {
+  id              String      @id @default(uuid()) @db.Uuid
+  asset_type_id   String      @db.Uuid
+  barangay_id     String      @db.Uuid
+  parent_asset_id String?     @db.Uuid
+  serial_number   String?     @db.VarChar(100)
+  name            String      @db.VarChar(255)
+  status          AssetStatus @default(PLANNED)
+  capacity        Int?
+  latitude        Decimal?    @db.Decimal(10, 7)
+  longitude       Decimal?    @db.Decimal(10, 7)
+  notes           String?     @db.Text
+
+  asset_type       NetworkAssetType @relation(fields: [asset_type_id], references: [id])
+  barangay         Barangay         @relation(fields: [barangay_id], references: [id])
+  parent_asset     NetworkAsset?    @relation("AssetHierarchy", fields: [parent_asset_id], references: [id])
+  child_assets     NetworkAsset[]   @relation("AssetHierarchy")
+
+  olt_port         OltPort?
+  splitter         Splitter?
+  distribution_box DistributionBox?
+  ont_device       OntDevice?
+  segments_from    FiberSegment[]   @relation("SegmentFrom")
+  segments_to      FiberSegment[]   @relation("SegmentTo")
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+  updated_by String?  @db.Uuid
+
+  @@index([barangay_id, asset_type_id, status])
+  @@index([parent_asset_id])
+  @@map("network_assets")
+}
+
+model OltPort {
+  id                    String @id @default(uuid()) @db.Uuid
+  asset_id              String @unique @db.Uuid
+  port_number           Int
+  capacity              Int    @default(128)
+  subscribers_connected Int    @default(0)
+
+  asset NetworkAsset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  @@map("olt_ports")
+}
+
+model Splitter {
+  id           String @id @default(uuid()) @db.Uuid
+  asset_id     String @unique @db.Uuid
+  ratio        String @db.VarChar(10)
+  output_count Int
+
+  asset NetworkAsset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  @@map("splitters")
+}
+
+model DistributionBox {
+  id       String  @id @default(uuid()) @db.Uuid
+  asset_id String  @unique @db.Uuid
+  capacity Int
+  location String? @db.VarChar(255)
+
+  asset NetworkAsset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  @@map("distribution_boxes")
+}
+
+model OntDevice {
+  id            String  @id @default(uuid()) @db.Uuid
+  asset_id      String  @unique @db.Uuid
+  subscriber_id String? @unique @db.Uuid
+  mac_address   String? @db.VarChar(17)
+  model         String? @db.VarChar(100)
+
+  asset      NetworkAsset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+  subscriber Subscriber?  @relation(fields: [subscriber_id], references: [id])
+
+  @@map("ont_devices")
+}
+
+model FiberSegment {
+  id            String   @id @default(uuid()) @db.Uuid
+  from_asset_id String   @db.Uuid
+  to_asset_id   String   @db.Uuid
+  length_meters Decimal? @db.Decimal(10, 2)
+  fiber_type    String?  @db.VarChar(50)
+  cable_count   Int?
+
+  from_asset NetworkAsset @relation("SegmentFrom", fields: [from_asset_id], references: [id])
+  to_asset   NetworkAsset @relation("SegmentTo", fields: [to_asset_id], references: [id])
+
+  created_at DateTime @default(now())
+
+  @@map("fiber_segments")
+}
+
+// ==========================================
+// INSTALLATION WORKFLOW (Phase 1)
+// ==========================================
+
+model InstallationJob {
+  id                     String             @id @default(uuid()) @db.Uuid
+  subscriber_id          String             @db.Uuid
+  status                 InstallationStatus @default(LEAD_CREATED)
+  assigned_technician_id String?            @db.Uuid
+  scheduled_date         DateTime?          @db.Date
+  completed_date         DateTime?          @db.Date
+  activation_date        DateTime?          @db.Date
+  failure_reason         String?            @db.Text
+  reschedule_reason      String?            @db.Text
+  notes                  String?            @db.Text
+
+  subscriber Subscriber @relation(fields: [subscriber_id], references: [id])
+  technician User?      @relation("technician", fields: [assigned_technician_id], references: [id])
+  materials  InstallationMaterial[]
+  photos     InstallationPhoto[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+
+  @@index([subscriber_id])
+  @@index([assigned_technician_id])
+  @@map("installation_jobs")
+}
+
+model InstallationMaterial {
+  id                String @id @default(uuid()) @db.Uuid
+  installation_id   String @db.Uuid
+  material_name     String @db.VarChar(255)
+  quantity          Int
+  unit              String @db.VarChar(50)
+  notes             String? @db.Text
+
+  installation InstallationJob @relation(fields: [installation_id], references: [id], onDelete: Cascade)
+
+  @@map("installation_materials")
+}
+
+model InstallationPhoto {
+  id              String @id @default(uuid()) @db.Uuid
+  installation_id String @db.Uuid
+  file_url        String @db.VarChar(500)
+  caption         String? @db.VarChar(255)
+  phase           String @db.VarChar(50)
+  uploaded_by     String? @db.Uuid
+
+  installation InstallationJob @relation(fields: [installation_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+
+  @@map("installation_photos")
+}
+
+// ==========================================
+// SERVICE TICKETING (Phase 1)
+// ==========================================
+
+model ServiceTicket {
+  id              String         @id @default(uuid()) @db.Uuid
+  ticket_number   String         @unique @db.VarChar(30)
+  subscriber_id   String         @db.Uuid
+  barangay_id     String         @db.Uuid
+  category        TicketCategory
+  priority        TicketPriority @default(P3_MEDIUM)
+  status          TicketStatus   @default(OPEN)
+  subject         String         @db.VarChar(255)
+  description     String?        @db.Text
+  sla_deadline    DateTime?
+  resolved_at     DateTime?
+  closed_at       DateTime?
+
+  subscriber  Subscriber         @relation(fields: [subscriber_id], references: [id])
+  assignments TicketAssignment[]
+  notes       TicketNote[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+
+  @@index([subscriber_id])
+  @@index([barangay_id, status])
+  @@index([status, priority])
+  @@map("service_tickets")
+}
+
+model TicketAssignment {
+  id          String  @id @default(uuid()) @db.Uuid
+  ticket_id   String  @db.Uuid
+  assigned_to String  @db.Uuid
+  assigned_by String? @db.Uuid
+  notes       String? @db.Text
+
+  ticket   ServiceTicket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  assignee User          @relation(fields: [assigned_to], references: [id])
+
+  created_at DateTime @default(now())
+
+  @@map("ticket_assignments")
+}
+
+model TicketNote {
+  id        String  @id @default(uuid()) @db.Uuid
+  ticket_id String  @db.Uuid
+  author_id String? @db.Uuid
+  content   String  @db.Text
+  is_internal Boolean @default(true)
+
+  ticket ServiceTicket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+
+  @@map("ticket_notes")
+}
+
+// ==========================================
+// BILLING ENGINE (Phase 2)
+// ==========================================
+
+model BillingCycle {
+  id            String             @id @default(uuid()) @db.Uuid
+  barangay_id   String             @db.Uuid
+  period_start  DateTime           @db.Date
+  period_end    DateTime           @db.Date
+  status        BillingCycleStatus @default(PENDING)
+  generated_at  DateTime?
+  invoice_count Int                @default(0)
+
+  barangay Barangay  @relation(fields: [barangay_id], references: [id])
+  invoices Invoice[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+
+  @@unique([barangay_id, period_start])
+  @@map("billing_cycles")
+}
+
+model Invoice {
+  id               String        @id @default(uuid()) @db.Uuid
+  invoice_number   String        @unique @db.VarChar(30)
+  subscriber_id    String        @db.Uuid
+  billing_cycle_id String?       @db.Uuid
+  barangay_id      String        @db.Uuid
+  total_amount     Decimal       @db.Decimal(18, 2)
+  amount_paid      Decimal       @default(0) @db.Decimal(18, 2)
+  due_date         DateTime      @db.Date
+  status           InvoiceStatus @default(DRAFT)
+  issued_at        DateTime?
+
+  subscriber    Subscriber    @relation(fields: [subscriber_id], references: [id])
+  billing_cycle BillingCycle? @relation(fields: [billing_cycle_id], references: [id])
+  lines         InvoiceLine[]
+  payments      Payment[]
+  adjustments   Adjustment[]
+  write_offs    WriteOff[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+
+  @@index([subscriber_id, status])
+  @@index([billing_cycle_id])
+  @@index([barangay_id, status])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String          @id @default(uuid()) @db.Uuid
+  invoice_id  String          @db.Uuid
+  line_type   InvoiceLineType
+  description String          @db.VarChar(255)
+  amount      Decimal         @db.Decimal(18, 2)
+  quantity    Int             @default(1)
+  total       Decimal         @db.Decimal(18, 2)
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@map("invoice_lines")
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  invoice_id        String?       @db.Uuid
+  subscriber_id     String        @db.Uuid
+  barangay_id       String        @db.Uuid
+  amount            Decimal       @db.Decimal(18, 2)
+  method            PaymentMethod
+  receipt_reference String?       @db.VarChar(100)
+  notes             String?       @db.Text
+  posted_at         DateTime      @default(now())
+  posted_by         String        @db.Uuid
+  reversed_at       DateTime?
+  reversal_reason   String?       @db.Text
+
+  invoice    Invoice?   @relation(fields: [invoice_id], references: [id])
+  subscriber Subscriber @relation(fields: [subscriber_id], references: [id])
+
+  created_at DateTime @default(now())
+
+  @@index([subscriber_id, posted_at])
+  @@index([barangay_id, posted_at])
+  @@map("payments")
+}
+
+model Adjustment {
+  id          String  @id @default(uuid()) @db.Uuid
+  invoice_id  String  @db.Uuid
+  type        String  @db.VarChar(20)
+  amount      Decimal @db.Decimal(18, 2)
+  reason      String  @db.Text
+  approved_by String? @db.Uuid
+  approved_at DateTime?
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id])
+
+  created_at DateTime @default(now())
+  created_by String?  @db.Uuid
+
+  @@map("adjustments")
+}
+
+model WriteOff {
+  id         String  @id @default(uuid()) @db.Uuid
+  invoice_id String  @db.Uuid
+  amount     Decimal @db.Decimal(18, 2)
+  reason     String  @db.Text
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id])
+
+  created_at DateTime @default(now())
+  created_by String?  @db.Uuid
+
+  @@map("write_offs")
+}
+
+model AccountLedgerEntry {
+  id            String          @id @default(uuid()) @db.Uuid
+  subscriber_id String          @db.Uuid
+  entry_type    LedgerEntryType
+  amount        Decimal         @db.Decimal(18, 2)
+  balance_after Decimal         @db.Decimal(18, 2)
+  reference_id  String?         @db.Uuid
+  reference_type String?        @db.VarChar(50)
+  description   String?         @db.VarChar(255)
+
+  subscriber Subscriber @relation(fields: [subscriber_id], references: [id])
+
+  created_at DateTime @default(now())
+  created_by String?  @db.Uuid
+
+  @@index([subscriber_id, created_at])
+  @@map("account_ledger_entries")
+}
+
+model SuspensionAction {
+  id            String               @id @default(uuid()) @db.Uuid
+  subscriber_id String               @db.Uuid
+  action_type   SuspensionActionType
+  suspension_type SuspensionType?
+  reason        String?              @db.Text
+  overdue_days  Int?
+  overdue_amount Decimal?            @db.Decimal(18, 2)
+  performed_by  String?              @db.Uuid
+
+  subscriber Subscriber @relation(fields: [subscriber_id], references: [id])
+
+  created_at DateTime @default(now())
+
+  @@index([subscriber_id, created_at])
+  @@map("suspension_actions")
+}
+
+// ==========================================
+// SETTLEMENTS (Phase 3)
+// ==========================================
+
+model Settlement {
+  id               String           @id @default(uuid()) @db.Uuid
+  agreement_id     String           @db.Uuid
+  period_start     DateTime         @db.Date
+  period_end       DateTime         @db.Date
+  status           SettlementStatus @default(DRAFTED)
+  gross_revenue    Decimal          @db.Decimal(18, 2)
+  total_deductions Decimal          @default(0) @db.Decimal(18, 2)
+  net_revenue      Decimal          @db.Decimal(18, 2)
+  partner_share    Decimal          @db.Decimal(18, 2)
+  operator_share   Decimal          @db.Decimal(18, 2)
+  calculated_at    DateTime?
+  approved_by      String?          @db.Uuid
+  approved_at      DateTime?
+  disbursed_at     DateTime?
+  locked_at        DateTime?
+  notes            String?          @db.Text
+
+  agreement   PartnerAgreement     @relation(fields: [agreement_id], references: [id])
+  lines       SettlementLine[]
+  adjustments SettlementAdjustment[]
+  statement   PartnerStatement?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+
+  @@unique([agreement_id, period_start])
+  @@map("settlements")
+}
+
+model SettlementLine {
+  id            String  @id @default(uuid()) @db.Uuid
+  settlement_id String  @db.Uuid
+  description   String  @db.VarChar(255)
+  category      String  @db.VarChar(50)
+  quantity      Int     @default(1)
+  unit_amount   Decimal @db.Decimal(18, 2)
+  total_amount  Decimal @db.Decimal(18, 2)
+
+  settlement Settlement @relation(fields: [settlement_id], references: [id], onDelete: Cascade)
+
+  @@map("settlement_lines")
+}
+
+model SettlementAdjustment {
+  id            String  @id @default(uuid()) @db.Uuid
+  settlement_id String  @db.Uuid
+  type          String  @db.VarChar(20)
+  amount        Decimal @db.Decimal(18, 2)
+  reason        String  @db.Text
+  approved_by   String? @db.Uuid
+  approved_at   DateTime?
+
+  settlement Settlement @relation(fields: [settlement_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  created_by String?  @db.Uuid
+
+  @@map("settlement_adjustments")
+}
+
+model PartnerStatement {
+  id            String @id @default(uuid()) @db.Uuid
+  settlement_id String @unique @db.Uuid
+  statement_number String @unique @db.VarChar(30)
+  generated_at  DateTime @default(now())
+  data          Json
+
+  settlement Settlement @relation(fields: [settlement_id], references: [id])
+
+  @@map("partner_statements")
+}

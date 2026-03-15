@@ -1,0 +1,22 @@
+{
+  "name": "fiberops-ph",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "dotenv": "^17.3.1",
+    "prisma": "6",
+    "turbo": "latest"
+  },
+  "dependencies": {
+    "@prisma/client": "6",
+    "@types/bcrypt": "^6.0.0",
+    "bcrypt": "^6.0.0"
+  },
+  "packageManager": "pnpm@8.15.5+sha256.4b4efa12490e5055d59b9b9fb042e430daeba88bdbebdcd93bbf62e3e9d8011c"
+}

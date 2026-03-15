@@ -1,0 +1,99 @@
+name: CI Pipeline
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install API dependencies
+        run: cd apps/api && npm ci
+      - name: Install Web dependencies
+        run: cd apps/web && npm ci
+      - name: TypeScript check (API)
+        run: cd apps/api && npx tsc --noEmit
+
+  unit-tests:
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install API dependencies
+        run: cd apps/api && npm ci
+      - name: Generate Prisma Client
+        run: cd apps/api && npx prisma generate --schema=../../prisma/schema.prisma
+      - name: Run tests
+        run: cd apps/api && npx jest --verbose --coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: apps/api/coverage/
+
+  build:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Build API
+        run: cd apps/api && npm ci && npx prisma generate --schema=../../prisma/schema.prisma && npm run build
+      - name: Build Web
+        run: cd apps/web && npm ci && npm run build
+
+  integration-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        ports: ['5432:5432']
+        env:
+          POSTGRES_DB: fiberops_test
+          POSTGRES_USER: fiberops
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: cd apps/api && npm ci
+      - name: Generate Prisma and run migrations
+        run: |
+          cd apps/api
+          npx prisma generate --schema=../../prisma/schema.prisma
+          npx prisma migrate deploy --schema=../../prisma/schema.prisma
+        env:
+          DATABASE_URL: postgresql://fiberops:test_password@localhost:5432/fiberops_test
+      - name: Run integration tests
+        run: cd apps/api && npx jest --verbose
+        env:
+          DATABASE_URL: postgresql://fiberops:test_password@localhost:5432/fiberops_test
+          REDIS_HOST: localhost
