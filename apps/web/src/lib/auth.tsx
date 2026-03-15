@@ -28,6 +28,25 @@ export function useAuth() {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
+// Map API role names (human-readable) → sidebar role keys (SCREAMING_SNAKE_CASE)
+const ROLE_MAP: Record<string, string> = {
+    'Super Admin':          'SUPER_ADMIN',
+    'Corporate Admin':      'SYSTEM_ADMIN',
+    'Operations Manager':   'MANAGER_NOC',
+    'Barangay Manager':     'MANAGER_CX',
+    'JV Partner Viewer':    'PARTNER_ADMIN',
+    'Finance Officer':      'MANAGER_FINANCE',
+    'Collection Officer':   'AGENT_BILLING',
+    'Network Engineer':     'AGENT_TECH',
+    'Field Technician':     'FIELD_TECH',
+    'Customer Service':     'AGENT_CX',
+    'Auditor':              'SYSTEM_ADMIN',
+    'Read-only Executive':  'PARTNER_ADMIN',
+};
+function normalizeRole(role: string): string {
+    return ROLE_MAP[role] || role.toUpperCase().replace(/\s+/g, '_');
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
@@ -72,18 +91,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({ email, password }),
         });
 
+        const raw = await res.json();
+
         if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.message || 'Login failed');
+            throw new Error(raw?.error?.message || raw?.message || 'Login failed');
         }
 
-        const data = await res.json();
-        const jwt = data.accessToken || data.token;
-        const profile: User = data.user || {
-            id: data.userId || 'unknown',
-            email,
-            name: data.name || email.split('@')[0],
-            role: data.role || 'USER',
+        // API wraps response in { success, data: { ... } }
+        const payload = raw.data || raw;
+        const jwt = payload.access_token || payload.accessToken || payload.token;
+        if (!jwt) throw new Error('No token received from server');
+
+        const apiUser = payload.user || {};
+        const profile: User = {
+            id: apiUser.id || 'unknown',
+            email: apiUser.email || email,
+            name: apiUser.full_name || apiUser.name || email.split('@')[0],
+            role: normalizeRole(apiUser.roles?.[0] || apiUser.role || 'USER'),
         };
 
         localStorage.setItem('fiberops_token', jwt);
